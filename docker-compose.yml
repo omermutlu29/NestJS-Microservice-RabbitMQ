@@ -1,0 +1,105 @@
+version: '3.8'
+services:
+  auth:
+    build:
+      context: .
+      dockerfile: ./apps/auth/Dockerfile
+      target: development
+    command: npm run start:dev auth
+    depends_on:
+      - mongodb-primary
+      - mongodb-secondary
+      - mongodb-arbiter
+      - rabbitmq
+    env_file:
+      - ./apps/auth/.env
+    volumes:
+      - .:/usr/src/app
+      - /usr/src/app/node_modules
+    ports:
+      - '3001:3001'
+  orders:
+    build:
+      context: .
+      dockerfile: ./apps/orders/Dockerfile
+      target: development
+    command: npm run start:dev orders
+    depends_on:
+      - mongodb-primary
+      - mongodb-secondary
+      - mongodb-arbiter
+      - billing
+      - rabbitmq
+    env_file:
+      - ./apps/orders/.env
+    volumes:
+    - .:/usr/src/app
+    - /usr/src/app/node_modules
+    ports:
+    - '3000:3000'
+  billing:
+    build:
+      context: .
+      dockerfile: ./apps/billing/Dockerfile
+      target: development
+    command: npm run start:dev billing
+    depends_on:
+      - mongodb-primary
+      - mongodb-secondary
+      - mongodb-arbiter
+      - auth
+      - rabbitmq
+    env_file:
+      - ./apps/billing/.env
+    volumes:
+      - .:/usr/src/app
+      - /usr/src/app/node_modules
+  rabbitmq:
+    image: rabbitmq
+    ports:
+    - '5672:5672'
+  #mongo:
+  #  image: mongo
+  #  restart: always
+  #  ports:
+  #  - '27017:27017'
+  #  environment:
+  #    MONGO_INITDB_ROOT_USERNAME: root
+  #    MONGO_INITDB_ROOT_PASSWORD: password123
+  mongodb-primary:
+    image: 'bitnami/mongodb:latest'
+    environment:
+      - MONGODB_ADVERTISED_HOSTNAME=mongodb-primary
+      - MONGODB_REPLICA_SET_MODE=primary
+      - MONGODB_ROOT_PASSWORD=password123
+      - MONGODB_REPLICA_SET_KEY=replicasetkey123
+
+    volumes:
+      - 'mongodb_master_data:/bitnami'
+
+  mongodb-secondary:
+    image: 'bitnami/mongodb:latest'
+    depends_on:
+      - mongodb-primary
+    environment:
+      - MONGODB_ADVERTISED_HOSTNAME=mongodb-secondary
+      - MONGODB_REPLICA_SET_MODE=secondary
+      - MONGODB_INITIAL_PRIMARY_HOST=mongodb-primary
+      - MONGODB_INITIAL_PRIMARY_PORT_NUMBER=27017
+      - MONGODB_INITIAL_PRIMARY_ROOT_PASSWORD=password123
+      - MONGODB_REPLICA_SET_KEY=replicasetkey123
+
+  mongodb-arbiter:
+    image: 'bitnami/mongodb:latest'
+    depends_on:
+      - mongodb-primary
+    environment:
+      - MONGODB_ADVERTISED_HOSTNAME=mongodb-arbiter
+      - MONGODB_REPLICA_SET_MODE=arbiter
+      - MONGODB_INITIAL_PRIMARY_HOST=mongodb-primary
+      - MONGODB_INITIAL_PRIMARY_PORT_NUMBER=27017
+      - MONGODB_INITIAL_PRIMARY_ROOT_PASSWORD=password123
+      - MONGODB_REPLICA_SET_KEY=replicasetkey123
+volumes:
+  mongodb_master_data:
+    driver: local
